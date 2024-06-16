@@ -26,23 +26,32 @@ namespace Bypass
                 BitConverter.GetBytes(loopCodePtr.ToInt64()).CopyTo(context, 248);
                 BitConverter.GetBytes(1048577).CopyTo(context, 48);
                 Toolhelp32.SetThreadContext(hThread, context);
-                Console.WriteLine("Killed Thread with ID: " + threadId);
+                Console.WriteLine("Killed Thread with the following ID: " + threadId);
                 IsThreadKilled = true;
             }
         }
 
-        private static bool KillThreadIn(string processExeName, string moduleName, long startAddressRVA)
+        private static bool KillThreadIn(string processExeName, string moduleName, long startAddressRVA, out bool gameNotFound)
         {
+            gameNotFound = false;
             IsThreadKilled = false;
+
             uint processPid = Toolhelp32.GetProcessPid(processExeName);
 
             if (processPid == 4294967295U) //hex: 0xFFFFFFFF
             {
-                Console.WriteLine("Couldn't find process!");
+                Console.WriteLine("Couldn't find process! Please make sure the game is open before using this tool.");
+                gameNotFound = true;
                 return false;
             }
 
             IntPtr hProcess = Mari.OpenProcess(2097151U, false, processPid);
+            if (hProcess == IntPtr.Zero)
+            {
+                Console.WriteLine("Failed to open process. Please ensure the tool is run with Administrator privileges.");
+                return false;
+            }
+
             IntPtr moduleBase = Toolhelp32.GetModuleBase(processPid, moduleName);
             IntPtr loopCodePtr = Mari.VirtualAllocEx(hProcess, IntPtr.Zero, 4U, 4096U, 64U);
 
@@ -75,7 +84,7 @@ namespace Bypass
 
         private static void Main(string[] args)
         {
-            Console.Title = "Cheat Engine Bypass";
+            Console.Title = "Cheat Engine Bypass | UC Version";
             Console.ForegroundColor = ConsoleColor.Cyan;
 
             bool restarting = true;
@@ -84,7 +93,7 @@ namespace Bypass
                 try
                 {
                     List<GameList> games = new List<GameList>();
-
+                    
                     using (StreamReader reader = new StreamReader("Threads.txt"))
                     {
                         int gameId = 0;
@@ -127,13 +136,20 @@ namespace Bypass
                         Console.WriteLine("Invalid ID!");
                     }
 
-                    if (KillThreadIn(games[selectedGameId].processname, games[selectedGameId].modname, games[selectedGameId].startRVA))
+                    bool gameNotFound;
+                    if (KillThreadIn(games[selectedGameId].processname, games[selectedGameId].modname, games[selectedGameId].startRVA, out gameNotFound))
                     {
                         Console.WriteLine("Success");
                     }
                     else
                     {
-                        Console.WriteLine("Something went wrong, try running as Admin!");
+                        if (!gameNotFound)
+                        {
+                            Console.WriteLine("Something went wrong. Ensure that the tool is run with Administrator privileges.");
+                        }
+                        Console.WriteLine("Waiting 3 seconds...");
+                        Thread.Sleep(3000);
+                        Console.Clear();
                     }
                 }
                 catch (Exception ex)
